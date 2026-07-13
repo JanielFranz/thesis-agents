@@ -45,10 +45,7 @@ model could ignore.
 ### 2.1 `create` mode — generate a chapter
 
 ```
-Researcher ──► Writer(outline) ──► [HUMAN checkpoint 1: approve / edit / reject]
-    │                                    (edit → Writer re-outlines, loops)
-    ▼
-Writer(draft)
+Researcher ──► Writer(outline) ──► Writer(draft)
     ▼
 Reviewer ↔ Writer   loop, capped at MAX_REVIEW_PASSES = 2
     │   (Reviewer returns {approved, feedback}; if not approved, Writer revises)
@@ -56,13 +53,15 @@ Reviewer ↔ Writer   loop, capped at MAX_REVIEW_PASSES = 2
 Judge ↔ Writer      loop, capped at MAX_JUDGE_RETRIES = 2
     │   (Judge returns a rubric verdict; controller machine-verifies its quotes;
     │    if rejected, Writer fixes the listed defects and the Judge re-scores)
-    │   └─ final rejection after the cap ──► [HUMAN: accept anyway / edit / reject]
-    ▼
-[HUMAN checkpoint 2: accept final draft / edit / reject]
-    │                                    (edit → Writer revises, loops)
+    │   └─ cap exhausted without approval ──► run completes anyway; the
+    │      controller records the unapproved verdict alongside the output
+    │      instead of pausing for a human decision
     ▼
 render_to_format(draft) ──► data/output/<slug>.docx
 ```
+
+Create mode runs **unattended, start to finish**, once launched — there is no
+mid-run pause for approval anywhere in this diagram.
 
 ### 2.2 `review` mode — grade an existing document
 
@@ -78,7 +77,9 @@ document; the pipeline only assesses it and reports.
 
 Both modes are entered from the CLI: `--spec <DocSpec.json>` plus
 `--mode create|review` (and `--input <file>` for review). Mode is asked
-interactively if omitted.
+interactively if omitted. **This mode choice is the pipeline's only point of
+human interaction** — see the guardrail in §6.2 — after that, the run
+proceeds unattended to a rendered output.
 
 ## 3. Target Layout
 
@@ -105,7 +106,6 @@ thesis-agents-python/
 │   │   └── cli.py                  ← arg parsing (--spec/--mode/--input), interactive prompts, dispatch, .env load
 │   ├── core/
 │   │   ├── controller.py           ← the state machine: create_mode(), review_mode(), run_agent(); loop caps
-│   │   ├── checkpoints.py          ← human_checkpoint() stdin gate + CheckpointRejected
 │   │   ├── rubric.py               ← the FIXED rubric (compiled-in) + rubric_to_text()
 │   │   └── verify.py               ← verify_verdict_quotes(): machine-check the Judge's quoted evidence
 │   ├── agents.py                   ← the 4 agent definitions: per-agent model tier, tool scope, guardrail
@@ -144,18 +144,17 @@ from a higher layer is a design error — stop and report.
 ```
 entrypoints/  ──►  core/        ──►  agents.py  ──►  adapters/  ──►  (OpenRouter / DeepSeek, files, web)
    (cli.py)      (controller,      (definitions)   (openrouter,
-                  rubric, verify,                   tools, formats)
-                  checkpoints)
+                  rubric, verify)                   tools, formats)
 ```
 
 - **entrypoints/** — thin CLI driver: parse args, validate the `DocSpec`, load
   `.env`, dispatch to `create_mode`/`review_mode`, print results. No routing
   logic beyond mode selection.
 - **core/** — the deterministic controller and its helpers. Owns every
-  transition, the loop caps, the human checkpoints, the rubric, and the
-  quote-verification. This is the part that makes the system *deterministic*;
-  it is pure Python and unit-testable with the model client mocked. Never
-  imports from `entrypoints/`.
+  transition, the loop caps, the rubric, and the quote-verification. This is
+  the part that makes the system *deterministic*; it is pure Python and
+  unit-testable with the model client mocked. Never imports from
+  `entrypoints/`.
 - **agents.py** — declares the four agents (system prompt file, model tier,
   scoped tools, guardrail). Consumed by the controller via `run_agent()`.
 - **adapters/** — the only layer that touches the outside world: the model
@@ -170,9 +169,10 @@ entrypoints/  ──►  core/        ──►  agents.py  ──►  adapters/
 
 All model access goes through **OpenRouter** (OpenAI-compatible gateway),
 driven by the **OpenAI Agents SDK** pointed at OpenRouter's `base_url`. Two
-DeepSeek tiers are used; the authoritative slugs and per-agent assignment live
-in `feature_list.json` → `stack` (re-verify the `deepseek-v4-*` slugs on
-OpenRouter at implementation time). This OpenRouter + OpenAI Agents SDK choice
+DeepSeek tiers (`pro` / `flash`) plus a Qwen tier (`qwen_plus`, used only by the
+Writer) are configured; the authoritative slugs and per-agent assignment live
+in `feature_list.json` → `stack` (re-verify the `deepseek-v4-*` and
+`qwen3.7-plus` slugs on OpenRouter at implementation time). This OpenRouter + OpenAI Agents SDK choice
 is the locked decision in `feature_list.json`; it supersedes the
 DeepSeek-direct / hand-rolled-loop option explored in `plan.md` (and resolves
 that document's open question about using an aggregator).
@@ -180,7 +180,7 @@ that document's open question about using an aggregator).
 | Agent | Tier | Tools (least privilege) | Why this tier |
 |---|---|---|---|
 | Researcher | **pro** (`deepseek/deepseek-v4-pro`) | read + web (read_file, grep, glob, web_search, web_fetch) | Only heavy multi-turn tool user; cheap-tier tool-calling is least reliable here, and a fabricated citation is a hard-to-reverse leak into the thesis. |
-| Writer | **pro** (`deepseek/deepseek-v4-pro`) | read + write/edit drafts (read_file, grep, glob, write_file, edit_file) | Produces the deliverable and is the only agent that repairs its own work across many revision turns; gates detect but never fix. |
+| Writer | **qwen_plus** (`qwen/qwen3.7-plus`) | read + write/edit drafts (read_file, grep, glob, write_file, edit_file) | Produces the deliverable and is the only agent that repairs its own work across many revision turns; gates detect but never fix. A different model family from the Pro Judge, so the terminal verifier no longer shares the generator's blind spots. |
 | Reviewer | **flash** (`deepseek/deepseek-v4-flash`) | read-only (read_file, grep, glob) | Non-terminal, 2-pass soft gate backstopped by the Pro Judge — the one bounded place to spend the cheap tier. |
 | Judge | **pro** (`deepseek/deepseek-v4-pro`) | read-only (read_file, grep, glob), `max_turns = 3` | Terminal gate with no downstream check; the reasoning itself must be strongest. |
 
@@ -198,12 +198,15 @@ trustworthy. They live in `core/` and `adapters/`, and are enforced regardless
 of what any agent outputs:
 
 1. **Loop caps** — `MAX_REVIEW_PASSES` and `MAX_JUDGE_RETRIES` are integer
-   counters in the controller. A final Judge rejection escalates to a human
-   rather than looping forever.
-2. **Human-in-the-loop checkpoints** — plain stdin gates (`y` = approve /
-   `edit` = send change instructions to the Writer / `n` = abort, raising
-   `CheckpointRejected`). Create mode has two (after the outline, after the
-   final draft) plus the Judge-rejection escalation.
+   counters in the controller. A final Judge rejection after the cap does
+   **not** escalate to a human: the run still completes and still renders its
+   output; the controller records the unapproved verdict alongside it. Every
+   run terminates in bounded time without a stdin pause.
+2. **Single human touchpoint: mode selection** — the only point where a
+   human decides anything is at CLI invocation, choosing `--mode
+   create|review` (asked interactively if omitted, see §2). Once a mode
+   starts, both `create` and `review` run unattended to a rendered output —
+   no stdin gate, no mid-run approval, no edit-and-loop, no escalation.
 3. **Structured output is validated in code** — Reviewer returns
    `{approved, feedback}`; Judge returns `{approved, perCriterionScores[],
    reasons[]}`. The controller **never routes on unvalidated free text**:

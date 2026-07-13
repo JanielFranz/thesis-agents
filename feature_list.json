@@ -14,7 +14,8 @@
     },
     "models": {
       "pro": "deepseek/deepseek-v4-pro",
-      "flash": "deepseek/deepseek-v4-flash"
+      "flash": "deepseek/deepseek-v4-flash",
+      "qwen_plus": "qwen/qwen3.7-plus"
     },
     "agent_models": {
       "researcher": {
@@ -23,9 +24,9 @@
         "why": "Only heavy multi-turn tool user (web + file); cheap-tier tool-call accuracy collapses on multi-turn orchestration (BFCL V4), and a fabricated or mis-formatted citation is a hard-to-detect, hard-to-reverse leak into the thesis."
       },
       "writer": {
-        "tier": "pro",
-        "model": "deepseek/deepseek-v4-pro",
-        "why": "Produces the actual deliverable and is the only agent that repairs its own work across many conflicting-feedback revision turns; gates detect but never fix, and at low document volume the Flash saving is trivial against chapter quality."
+        "tier": "qwen_plus",
+        "model": "qwen/qwen3.7-plus",
+        "why": "Produces the actual deliverable and is the only agent that repairs its own work across many conflicting-feedback revision turns; gates detect but never fix, so draft quality dominates cost at this document volume. Assigned the qwen_plus tier (qwen/qwen3.7-plus) — deliberately a different model family from the deepseek Pro Judge, so the terminal gate does not share the Writer's blind spots. Re-verify the qwen3.7-plus slug on OpenRouter at implementation time."
       },
       "reviewer": {
         "tier": "flash",
@@ -39,8 +40,8 @@
       }
     },
     "notes": [
-      "Per-agent tiers were decided via a 4-lens judge panel; the agentic-tool-reliability and faithful-port lenses both landed on pro/pro/flash/pro.",
-      "Known limitation: Judge and Writer share one model family + tier, so the verifier partly shares the generator's blind spots (verification drifts toward self-agreement). Mitigated by the machine-verified verbatim-quote requirement, the fixed rubric, and the two human checkpoints.",
+      "Per-agent tiers were originally decided via a 4-lens judge panel that landed on pro/pro/flash/pro (researcher/writer/reviewer/judge); the Writer was subsequently moved from the pro tier to qwen_plus (qwen/qwen3.7-plus) — see writer.why.",
+      "Judge and Writer are now different model families (Judge = deepseek pro, Writer = qwen_plus), so the terminal verifier no longer shares the generator's blind spots — this removes the self-agreement risk that existed when both were deepseek pro. Separately, as of the create-mode redesign in architecture.md §6.2, create mode has no human final-draft checkpoint left as a backstop (it runs unattended end-to-end, gated only by mode selection at the CLI), so the machine-verified verbatim-quote requirement and the fixed rubric are the only line of defense against a false APPROVE.",
       "Reviewer is the closest call and the pipeline's thin spot — escalate flash -> pro if it starts rubber-stamping (Judge rejects drafts the Reviewer approved in >~30% of runs, thin/contradictory feedback, or {approved, feedback} parse failures).",
       "Structured output for Reviewer/Judge uses prompting + code-side validation, NOT native tool-call JSON (DeepSeek native function-calling accuracy collapses ~50pts vs prompting on BFCL V4). Keep the controller's verbatim-quote machine-check.",
       "Model slugs are config-driven; the deepseek-v4-* names supersede the retired deepseek-chat / deepseek-reasoner aliases — re-verify the current slugs on OpenRouter at implementation time."
@@ -59,7 +60,7 @@
     {
       "id": 1,
       "name": "project_skeleton",
-      "status": "pending",
+      "status": "done",
       "depends_on": [],
       "paths": [
         "config.py",
@@ -79,7 +80,7 @@
     {
       "id": 2,
       "name": "openrouter_client",
-      "status": "pending",
+      "status": "done",
       "depends_on": [1],
       "paths": [
         "config.py",
@@ -88,7 +89,7 @@
       ],
       "acceptance": [
         "The OpenAI Agents SDK is configured against OpenRouter's OpenAI-compatible base_url (stack.model_provider.base_url); the API key is read only in config.py from env, with no default, and fails loudly if missing.",
-        "The two model slugs (stack.models.pro / stack.models.flash) are config constants, never inlined at call sites.",
+        "The configured model slugs in stack.models (pro / flash / qwen_plus) are config constants, never inlined at call sites; tier selection resolves any configured tier by name.",
         "Per-call token usage is captured for cost accounting, and a per-stage maxTurns cap is enforceable.",
         "Unit test mocks the HTTP/client layer (no real network call) and asserts the client targets the OpenRouter base_url and selects the requested tier.",
         "uv run ruff check . clean; bash init.sh green."
@@ -97,7 +98,7 @@
     {
       "id": 3,
       "name": "agent_definitions",
-      "status": "pending",
+      "status": "in_progress",
       "depends_on": [2],
       "paths": [
         "src/thesis_agents/agents.py",
@@ -105,11 +106,31 @@
         "tests/unit/test_agent_definitions.py"
       ],
       "acceptance": [
-        "The four agents (researcher, writer, reviewer, judge) are defined with the per-agent model tier from stack.agent_models (researcher=pro, writer=pro, reviewer=flash, judge=pro) and least-privilege tool scoping (only the researcher gets web tools).",
+        "The four agents (researcher, writer, reviewer, judge) are defined with the per-agent model tier from stack.agent_models (researcher=pro, writer=qwen_plus, reviewer=flash, judge=pro) and least-privilege tool scoping (only the researcher gets web tools).",
         "A code-side pre-tool-call guardrail (OpenAI Agents SDK tool_input_guardrail, or an equivalent dispatcher wrapper) denies nested agent/task spawning and any tool access to .env — enforced in code, not by prompt.",
         "Agent system prompts live in prompts/ as files, not inline strings.",
         "Reviewer and Judge produce their structured output via prompting + code-side jsonschema validation (not native tool-call JSON); the Judge's per-criterion verbatim quotes remain machine-verifiable against the draft.",
         "Unit tests assert each agent's model slug and tool scope, and that the guardrail denies a .env read and a nested-spawn attempt.",
+        "uv run ruff check . clean; bash init.sh green."
+      ]
+    },
+    {
+      "id": 4,
+      "name": "agent_result_logging",
+      "status": "pending",
+      "depends_on": [2, 3],
+      "paths": [
+        "config.py",
+        "src/thesis_agents/core/controller.py",
+        "src/thesis_agents/adapters/openrouter.py",
+        "tests/unit/test_agent_result_logging.py"
+      ],
+      "acceptance": [
+        "Every run_agent() call (core/controller.py) emits exactly one structured log line per conventions.md §5 (logger.info(json.dumps(...)), never print()) containing at minimum: agent name, pipeline stage, model tier/slug, run_id, duration_ms, prompt/completion token usage, derived cost, and success/failure outcome.",
+        "A run_id is generated once per pipeline invocation (create_mode/review_mode) and threaded through every run_agent() call in that run, so all four agents' log lines from one run share the same run_id.",
+        "When config.py's trace_dir is set (env-overridable, default data/output/traces/), each run_agent() call additionally appends one full JSON record (including the untruncated prompt and output, not just the summary) to <trace_dir>/<run_id>.jsonl — a complete, local-only, replayable per-run transcript across all four agents.",
+        "No new third-party dependency is added for this (no LangChain, no LangSmith): LangChain's orchestration model would conflict with the deterministic controller owning all routing (architecture.md §2, §4), and LangSmith's default tracing uploads full prompts/completions — i.e. thesis draft content and source excerpts — to a third-party service and requires a second secret, which contradicts config.py's single-secret invariant (architecture.md §9). Logging stays stdlib logging + local files.",
+        "Unit test mocks the model client and asserts: the structured log line's fields are present with correct types and a shared run_id across a multi-agent run; when trace_dir is set, the JSONL file receives exactly one appended line per call with the expected keys.",
         "uv run ruff check . clean; bash init.sh green."
       ]
     }
