@@ -149,3 +149,28 @@
   APPROVED (`progress/review_rubric.md`).
 - **Final status:** feature 6 `done`. Eligible next: 7 `verify` (deps [5,6] now
   both done) and 8 `formats` (deps [5]). 7 `verify` completes the gate logic.
+
+## 2026-07-13 — Feature 7 `verify` done (the code-side gate)
+
+- **Feature 7 (implementer → reviewer):** `core/verify.py` —
+  `verify_verdict_quotes(verdict, draft) -> Verdict`. Ignores the model's
+  self-reported `approved` and recomputes `all(score >= threshold)` against the
+  imported rubric (not duplicated). Voids the verdict (forces approved=false +
+  appends a reason) on: missing rubric criterion, unknown/extra criterionId,
+  duplicate criterionId, too-short quote (`MIN_QUOTE_CHARS=12`), or a quote not
+  present verbatim after normalization (`" ".join(text.split()).casefold()` —
+  whitespace-collapse + case-fold). Approval requires BOTH thresholds AND all
+  quote/coverage checks (plain 3-way AND, no short-circuit masking). Returns a
+  revalidated Verdict; input never mutated. Pure (no env/IO/model). No new dep.
+- **Verification:** reviewer independently ran ruff (clean), 71 tests (11 new)
+  green with `OPENROUTER_API_KEY` stripped, `init.sh` exit 0, and probed for
+  false-APPROVE holes (empty scores fail safe; duplicate/unknown ids can't
+  smuggle a passing score; fabricated quotes can't pass). All C1–C5 green.
+  APPROVED (`progress/review_verify.md`).
+- **Non-blocking hardening note (tracked):** the min-length guard measures the
+  RAW quote length, not the normalized length — a whitespace-padded quote can
+  clear the 12-char floor while its normalized content is shorter. Does NOT
+  admit fabricated text (normalized span must still appear in the draft); a
+  future pass could measure `len(_normalize(quote))`.
+- **Final status:** feature 7 `done`. Only 8 `formats` (deps [5]) now blocks
+  9 `controller`. Then 10 `cli` makes the pipeline runnable.

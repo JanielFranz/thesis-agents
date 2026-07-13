@@ -6,10 +6,9 @@
 
 ## Feature in progress
 
-_(none)_ — Feature 6 `rubric` completed + approved (2026-07-13). `init.sh`:
-6 done / 0 in progress. Eligible next: **7 `verify`** (deps [5,6] ✓) and
-**8 `formats`** (deps [5] ✓). Recommended: 7 `verify` (completes the gate logic;
-along with 8 it's the last piece before 9 `controller`).
+- **Feature 8 `formats`** (status `in_progress`; depends_on: [5] ✓ done).
+  Implementer dispatched. render_to_format switch + prose.py (Markdown→docx,
+  adds python-docx) + slides.py stub. Last piece before 9 `controller`.
 
 ## Backlog expanded — features 5–10 added (2026-07-13)
 
@@ -37,6 +36,9 @@ acceptance criteria first.
 - Dev deps `pytest`/`ruff` use `>=`, not exact pins — future tidy.
 - Stray root `main.py` (PyCharm sample) ruff-excluded rather than deleted.
 - `_SECRET_MARKERS` guardrail hardening idea (feature-3 reviewer note).
+- `verify.py` min-length guard measures RAW quote length, not normalized —
+  a future pass could use `len(_normalize(quote))` (feature-7 reviewer note;
+  does NOT admit fabricated text).
 
 ## Log
 
