@@ -1,0 +1,117 @@
+{
+  "project": "thesis-agents-python",
+  "description": "Backlog of features. The leader dispatches one pending feature at a time whose depends_on are all done; the implementer builds it; the reviewer approves before it flips to done.",
+  "stack": {
+    "model_provider": {
+      "name": "OpenRouter",
+      "base_url": "https://openrouter.ai/api/v1",
+      "notes": "OpenAI-compatible gateway; one API key proxies both DeepSeek tiers. All model access goes through it — no direct DeepSeek or Anthropic SDK."
+    },
+    "sdk": {
+      "name": "OpenAI Agents SDK",
+      "package": "openai-agents",
+      "notes": "Orchestration primitive (agent + tool loop), pointed at OpenRouter's base_url. The deterministic controller still owns ALL routing; the SDK's tool_input_guardrail supplies the code-side pre-tool-call deny gate (nested-agent + .env blocks)."
+    },
+    "models": {
+      "pro": "deepseek/deepseek-v4-pro",
+      "flash": "deepseek/deepseek-v4-flash"
+    },
+    "agent_models": {
+      "researcher": {
+        "tier": "pro",
+        "model": "deepseek/deepseek-v4-pro",
+        "why": "Only heavy multi-turn tool user (web + file); cheap-tier tool-call accuracy collapses on multi-turn orchestration (BFCL V4), and a fabricated or mis-formatted citation is a hard-to-detect, hard-to-reverse leak into the thesis."
+      },
+      "writer": {
+        "tier": "pro",
+        "model": "deepseek/deepseek-v4-pro",
+        "why": "Produces the actual deliverable and is the only agent that repairs its own work across many conflicting-feedback revision turns; gates detect but never fix, and at low document volume the Flash saving is trivial against chapter quality."
+      },
+      "reviewer": {
+        "tier": "flash",
+        "model": "deepseek/deepseek-v4-flash",
+        "why": "Read-only, non-terminal, 2-pass soft gate backstopped by the Pro Judge; worst case is one wasted Writer revision — the single bounded/backstopped place to spend the cheap tier."
+      },
+      "judge": {
+        "tier": "pro",
+        "model": "deepseek/deepseek-v4-pro",
+        "why": "Terminal pass/fail gate with no downstream check (a false APPROVE ships); mirrors the original's deliberate opus-for-the-gate choice. Quote machine-verification guards the evidence, not the judgment, so the reasoning itself must be the strongest tier."
+      }
+    },
+    "notes": [
+      "Per-agent tiers were decided via a 4-lens judge panel; the agentic-tool-reliability and faithful-port lenses both landed on pro/pro/flash/pro.",
+      "Known limitation: Judge and Writer share one model family + tier, so the verifier partly shares the generator's blind spots (verification drifts toward self-agreement). Mitigated by the machine-verified verbatim-quote requirement, the fixed rubric, and the two human checkpoints.",
+      "Reviewer is the closest call and the pipeline's thin spot — escalate flash -> pro if it starts rubber-stamping (Judge rejects drafts the Reviewer approved in >~30% of runs, thin/contradictory feedback, or {approved, feedback} parse failures).",
+      "Structured output for Reviewer/Judge uses prompting + code-side validation, NOT native tool-call JSON (DeepSeek native function-calling accuracy collapses ~50pts vs prompting on BFCL V4). Keep the controller's verbatim-quote machine-check.",
+      "Model slugs are config-driven; the deepseek-v4-* names supersede the retired deepseek-chat / deepseek-reasoner aliases — re-verify the current slugs on OpenRouter at implementation time."
+    ]
+  },
+  "rules": {
+    "valid_status": ["pending", "in_progress", "blocked", "done"],
+    "notes": [
+      "At most one feature may be 'in_progress' at a time.",
+      "A feature may only be 'in_progress' or 'done' if all its depends_on are 'done'.",
+      "Only the implementer flips a feature to 'done', and only after reviewer approval.",
+      "Each feature lists the files it may touch in 'paths' and its 'acceptance' criteria."
+    ]
+  },
+  "features": [
+    {
+      "id": 1,
+      "name": "project_skeleton",
+      "status": "pending",
+      "depends_on": [],
+      "paths": [
+        "config.py",
+        "src/thesis_agents/__init__.py",
+        "tests/conftest.py",
+        "tests/unit/",
+        "pyproject.toml"
+      ],
+      "acceptance": [
+        "uv-managed package skeleton per .claude/rules/architecture.md §3 (config.py + package layers + tests).",
+        "config.py is the only module reading os.environ; exposes load_config().",
+        "uv run pytest tests -q -m 'not integration' is green with at least one smoke test.",
+        "uv run ruff check . and ruff format --check . are clean.",
+        "bash init.sh finishes with [OK] Environment ready."
+      ]
+    },
+    {
+      "id": 2,
+      "name": "openrouter_client",
+      "status": "pending",
+      "depends_on": [1],
+      "paths": [
+        "config.py",
+        "src/thesis_agents/adapters/openrouter.py",
+        "tests/unit/test_openrouter_client.py"
+      ],
+      "acceptance": [
+        "The OpenAI Agents SDK is configured against OpenRouter's OpenAI-compatible base_url (stack.model_provider.base_url); the API key is read only in config.py from env, with no default, and fails loudly if missing.",
+        "The two model slugs (stack.models.pro / stack.models.flash) are config constants, never inlined at call sites.",
+        "Per-call token usage is captured for cost accounting, and a per-stage maxTurns cap is enforceable.",
+        "Unit test mocks the HTTP/client layer (no real network call) and asserts the client targets the OpenRouter base_url and selects the requested tier.",
+        "uv run ruff check . clean; bash init.sh green."
+      ]
+    },
+    {
+      "id": 3,
+      "name": "agent_definitions",
+      "status": "pending",
+      "depends_on": [2],
+      "paths": [
+        "src/thesis_agents/agents.py",
+        "prompts/",
+        "tests/unit/test_agent_definitions.py"
+      ],
+      "acceptance": [
+        "The four agents (researcher, writer, reviewer, judge) are defined with the per-agent model tier from stack.agent_models (researcher=pro, writer=pro, reviewer=flash, judge=pro) and least-privilege tool scoping (only the researcher gets web tools).",
+        "A code-side pre-tool-call guardrail (OpenAI Agents SDK tool_input_guardrail, or an equivalent dispatcher wrapper) denies nested agent/task spawning and any tool access to .env — enforced in code, not by prompt.",
+        "Agent system prompts live in prompts/ as files, not inline strings.",
+        "Reviewer and Judge produce their structured output via prompting + code-side jsonschema validation (not native tool-call JSON); the Judge's per-criterion verbatim quotes remain machine-verifiable against the draft.",
+        "Unit tests assert each agent's model slug and tool scope, and that the guardrail denies a .env read and a nested-spawn attempt.",
+        "uv run ruff check . clean; bash init.sh green."
+      ]
+    }
+  ]
+}

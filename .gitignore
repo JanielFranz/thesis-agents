@@ -1,0 +1,21 @@
+# uv-managed virtualenv (recreated by `uv sync`)
+.venv/
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+
+# Test / lint caches
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Local secrets / env — never commit
+.env
+.env.*
+!.env.example
+
+# IDE
+.idea/
+.vscode/
