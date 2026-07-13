@@ -133,6 +133,120 @@
         "Unit test mocks the model client and asserts: the structured log line's fields are present with correct types and a shared run_id across a multi-agent run; when trace_dir is set, the JSONL file receives exactly one appended line per call with the expected keys.",
         "uv run ruff check . clean; bash init.sh green."
       ]
+    },
+    {
+      "id": 5,
+      "name": "schemas",
+      "status": "done",
+      "depends_on": [1],
+      "paths": [
+        "src/thesis_agents/schemas/__init__.py",
+        "src/thesis_agents/schemas/models.py",
+        "tests/unit/test_schemas.py",
+        "pyproject.toml"
+      ],
+      "acceptance": [
+        "DocSpec (Pydantic) carries the architecture §8 fields: title, docType ('thesis-chapter'), format ('docx'|'pptx'), language, chapter{number,title}, audience, targetWords, citationStyle, requirements[], notes — with enums/types enforced.",
+        "Review = {approved: bool, feedback: str}; Verdict = {approved: bool, perCriterionScores: CriterionScore[], reasons: str[]}; CriterionScore = {criterionId: str, score: int in 0..5, quotedJustification: str, comment: str}.",
+        "Each model exposes its JSON schema (e.g. model_json_schema()); models carry no behavior beyond validation (architecture §4).",
+        "Unit tests assert a valid DocSpec and a valid Verdict parse to the expected field values, AND that invalid input (bad format enum, out-of-range score, missing required field) raises pydantic ValidationError.",
+        "pydantic is added via uv add with an exact pin (recorded in pyproject.toml + uv.lock).",
+        "uv run ruff check . clean; bash init.sh green."
+      ]
+    },
+    {
+      "id": 6,
+      "name": "rubric",
+      "status": "in_progress",
+      "depends_on": [1],
+      "paths": [
+        "src/thesis_agents/core/rubric.py",
+        "tests/unit/test_rubric.py"
+      ],
+      "acceptance": [
+        "The fixed six-criterion rubric is compiled-in per architecture §7: grounding (pass >=4), references (>=4), scope (>=3), structure (>=3), argument (>=3), style (>=3) — each scored 0..5 with its passing threshold.",
+        "rubric_to_text() returns text listing every criterion id, description, and threshold, suitable for embedding in the Judge prompt.",
+        "A helper exposes the criterion ids and their thresholds (for parity checks by verify); the passing rule is documented: approved iff every criterion meets its threshold.",
+        "Unit tests assert the exact set of six criterion ids and their thresholds, and that rubric_to_text() mentions each criterion.",
+        "uv run ruff check . clean; bash init.sh green."
+      ]
+    },
+    {
+      "id": 7,
+      "name": "verify",
+      "status": "pending",
+      "depends_on": [5, 6],
+      "paths": [
+        "src/thesis_agents/core/verify.py",
+        "tests/unit/test_verify.py"
+      ],
+      "acceptance": [
+        "verify_verdict_quotes(verdict, draft) normalizes text and checks (architecture §6.4): (a) every rubric criterion is scored — a missing or unknown criterionId voids the verdict; (b) each quotedJustification meets a minimum length; (c) each quote occurs verbatim (after normalization) in the draft.",
+        "Any failure voids the verdict — forces approved=false with the reason appended — in code, not by debate.",
+        "approved is recomputed in code as all(score >= threshold) from the per-criterion scores against the rubric (architecture §7 hardening); a verdict counts as an approval only if it passes BOTH the recomputed thresholds AND the quote check.",
+        "The function returns a typed result (the adjusted Verdict / a verification result carrying approved + reasons), never unvalidated free text.",
+        "Unit tests assert: a verdict whose quotes are all present and all scores meet threshold stays approved; a fabricated/absent quote voids it (approved false, reason appended); a missing or unknown criterion voids it; a single sub-threshold score flips approved to false via the recompute.",
+        "uv run ruff check . clean; bash init.sh green."
+      ]
+    },
+    {
+      "id": 8,
+      "name": "formats",
+      "status": "pending",
+      "depends_on": [5],
+      "paths": [
+        "src/thesis_agents/adapters/formats/__init__.py",
+        "src/thesis_agents/adapters/formats/prose.py",
+        "src/thesis_agents/adapters/formats/slides.py",
+        "tests/unit/test_formats.py",
+        "pyproject.toml"
+      ],
+      "acceptance": [
+        "render_to_format(markdown, spec, output_dir, name_hint=None) in adapters/formats/__init__.py slugifies a filename and routes to a renderer by spec.format (architecture §8); output_dir comes from the caller (config), not hard-coded.",
+        "prose.py renders the Writer's Markdown subset (#/##/### headings, paragraphs, -/* bullets, 1. numbered items, **bold**/*italic*) to .docx via python-docx and returns the written file path under output_dir.",
+        "slides.py (.pptx) is a stub that raises NotImplementedError until implemented.",
+        "python-docx is added via uv add with an exact pin (pyproject.toml + uv.lock).",
+        "Unit tests (tmp_path as output_dir, no filesystem mocking) assert: a docx spec produces a .docx file whose content reflects the input Markdown (headings/paragraphs present); a pptx spec raises NotImplementedError; slugify produces the expected safe filename.",
+        "uv run ruff check . clean; bash init.sh green."
+      ]
+    },
+    {
+      "id": 9,
+      "name": "controller",
+      "status": "pending",
+      "depends_on": [3, 4, 5, 6, 7, 8],
+      "paths": [
+        "src/thesis_agents/core/controller.py",
+        "tests/unit/test_controller.py"
+      ],
+      "acceptance": [
+        "create_mode(spec, ...) drives Researcher -> Writer(outline) -> Writer(draft) -> Reviewer<->Writer (capped at MAX_REVIEW_PASSES) -> Judge<->Writer (capped at MAX_JUDGE_RETRIES) -> render_to_format, generating one run_id via new_run_id() and threading it through every run_agent() call. It runs UNATTENDED — no human checkpoints (architecture §6.2).",
+        "Loop caps are integer counters in code (architecture §6.1); a final Judge rejection after MAX_JUDGE_RETRIES neither loops forever nor prompts a human — the run completes and the controller records the unapproved verdict alongside the rendered output.",
+        "The controller never routes on unvalidated free text: Reviewer/Judge outputs are parsed and validated against their Pydantic schema (retried on failure), and the Judge verdict must pass verify_verdict_quotes() plus the recomputed all(score>=threshold) gate before it can count as an approval (architecture §6.3/§6.4/§7).",
+        "review_mode(document, ...) runs Reviewer -> Judge (quotes verified) -> assembles a Markdown review report -> render_to_format; no Writer and no revision loop (architecture §2.2).",
+        "Unit tests (all agents + model client mocked, no network) assert: create_mode honors MAX_REVIEW_PASSES and MAX_JUDGE_RETRIES (counters not exceeded); a shared run_id across the run; a Judge rejection after the cap still completes and records the unapproved verdict; a fabricated Judge quote is rejected by the code-side verify; review_mode produces a report without invoking a Writer.",
+        "uv run ruff check . clean; bash init.sh green."
+      ]
+    },
+    {
+      "id": 10,
+      "name": "cli",
+      "status": "pending",
+      "depends_on": [5, 9],
+      "paths": [
+        "src/thesis_agents/entrypoints/cli.py",
+        "src/thesis_agents/__main__.py",
+        "tests/unit/test_cli.py",
+        "pyproject.toml"
+      ],
+      "acceptance": [
+        "cli.py parses --spec <DocSpec.json>, --mode create|review, and --input <file> (for review); validates the DocSpec at the boundary before any model call; loads .env; dispatches to create_mode/review_mode; prints results. Mode is asked interactively if omitted.",
+        "Mode selection is the pipeline's ONLY human interaction (architecture §6.2); the entrypoint holds no routing logic beyond mode selection and never imports upward past core/.",
+        ".env is loaded here (python-dotenv exact-pinned via uv, or a stdlib parser — not in config.py); OPENROUTER_API_KEY is still resolved via config.py with no default / fail-loud.",
+        "python -m thesis_agents runs the CLI (a __main__.py entrypoint).",
+        "Unit tests (controller + model mocked, no network, real .env not consulted) assert: a valid --spec/--mode dispatches to the correct mode; an invalid DocSpec is rejected at the boundary with a clear error and no model call is made; a missing --mode triggers the interactive prompt path (stdin mocked).",
+        "uv run ruff check . clean; bash init.sh green."
+      ]
     }
   ]
 }

@@ -85,3 +85,48 @@
   all denied. All C1–C5 green. APPROVED (`progress/review_agent_definitions.md`).
 - **Final status:** feature 3 `done`. Feature 4 `agent_result_logging` (deps
   [2,3]) now eligible — but see the controller-gap note in current.md.
+
+## 2026-07-13 — Feature 4 `agent_result_logging` done — BACKLOG COMPLETE (4/4)
+
+- **Scope decision (leader):** the backlog skipped the controller state machine,
+  so feature 4 built ONLY the instrumented `run_agent()` primitive — NOT
+  `create_mode`/`review_mode` (deferred to a future controller feature).
+- **Feature 4 (implementer → reviewer):** new `core/controller.py` with
+  `new_run_id()` (uuid4 hex) + async `run_agent()` wrapping the feature-2
+  `OpenRouterClient.run_stage`; emits exactly one structured
+  `logger.info(json.dumps(...))` line per call (agent/stage/tier/model/run_id/
+  duration_ms/token usage/cost/outcome — no prompt text at INFO), and optionally
+  appends one full untruncated JSON record (prompt+output) to
+  `<trace_dir>/<run_id>.jsonl`. `config.py` gained env-overridable `trace_dir`
+  (`THESIS_TRACE_DIR`/`THESIS_TRACE_ENABLED`, default `data/output/traces/`),
+  still the sole env reader. Typed `AgentRunResult`. **No dependency added** —
+  stdlib logging + local files (the no-LangChain/LangSmith decision, enforced).
+- **Verification:** reviewer independently ran ruff (clean), 39 tests (7 new)
+  green with `OPENROUTER_API_KEY` stripped, `init.sh` exit 0, and `git diff` on
+  pyproject/uv.lock EMPTY (no dep). All C1–C5 green. APPROVED
+  (`progress/review_agent_result_logging.md`).
+- **Backlog status:** all 4 features `done`; `init.sh` = 4 done / 0 in progress
+  / 39 passing / exit 0. The pipeline is NOT yet runnable end-to-end — the
+  architecture still needs new features: controller state machines
+  (`create_mode`/`review_mode`), `schemas/models.py`, `core/rubric.py`,
+  `core/verify.py`, `entrypoints/cli.py`, `adapters/formats/`. Awaiting user
+  decision on whether to add + build those next.
+
+## 2026-07-13 — Backlog expanded (5–10) + Feature 5 `schemas` done
+
+- **Backlog (leader):** added features 5 `schemas`, 6 `rubric`, 7 `verify`,
+  8 `formats`, 9 `controller`, 10 `cli` with acceptance criteria + deps
+  (chain: 5[1], 6[1], 7[5,6], 8[5], 9[3,4,5,6,7,8], 10[5,9]). Deps validated
+  (each strictly earlier, no unknowns/cycles); `init.sh` green at 10 features.
+- **Feature 5 (implementer → reviewer):** `schemas/models.py` — the four §8
+  Pydantic v2 contracts (`DocSpec`, `Review`, `Verdict`, `CriterionScore`) +
+  nested `Chapter`, field names verbatim from §8 (no aliases), score bounded
+  0..5, `format`/`docType` true `Literal` enums, JSON schemas via built-in
+  `model_json_schema()`. Pure validation, no I/O/env. `pydantic==2.13.4`
+  exact-pinned (first runtime dep besides openai-agents).
+- **Verification:** reviewer independently ran ruff (clean), 53 tests (14 new)
+  green with `OPENROUTER_API_KEY` stripped, `init.sh` exit 0, and verified §8
+  field-name fidelity line by line. All C1–C5 green. APPROVED
+  (`progress/review_schemas.md`).
+- **Final status:** feature 5 `done`. Eligible next: 6 `rubric` and 8 `formats`
+  (deps satisfied). 6 `rubric` recommended next (unblocks 7 `verify`).
