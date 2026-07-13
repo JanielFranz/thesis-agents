@@ -60,6 +60,14 @@ DEFAULT_REQUEST_TIMEOUT_S = 120.0
 #: it is missing.
 OPENROUTER_API_KEY_ENV = "OPENROUTER_API_KEY"
 
+#: Per-run JSONL trace of full prompts/outputs (architecture.md §6.7, §9). Local
+#: only — written under ``data/output/`` which is gitignored; never uploaded to a
+#: third-party service (no LangSmith/Langfuse). ``THESIS_TRACE_ENABLED`` toggles
+#: it off entirely (``trace_dir`` becomes ``None``); ``THESIS_TRACE_DIR``
+#: overrides the directory.
+TRACE_DIR_ENV = "THESIS_TRACE_DIR"
+TRACE_ENABLED_ENV = "THESIS_TRACE_ENABLED"
+
 
 class ConfigError(RuntimeError):
     """Raised when required configuration (a secret) is missing or empty."""
@@ -86,6 +94,8 @@ class AppConfig:
     input_dir: Path
     output_dir: Path
     drafts_dir: Path
+    #: Per-run trace directory, or ``None`` when tracing is disabled.
+    trace_dir: Path | None
 
     # model backend (architecture.md §5)
     openrouter_base_url: str
@@ -143,6 +153,13 @@ def _env_path(name: str, default: Path) -> Path:
     return Path(value).expanduser() if value else default
 
 
+def _env_bool(name: str, default: bool) -> bool:
+    value = os.environ.get(name)
+    if value is None or value == "":
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
 def _env_int(name: str, default: int) -> int:
     value = os.environ.get(name)
     if value is None or value == "":
@@ -193,6 +210,11 @@ def load_config() -> AppConfig:
     data_dir = _env_path("DATA_DIR", root_dir / "data")
     output_dir = _env_path("OUTPUT_DIR", data_dir / "output")
 
+    trace_enabled = _env_bool(TRACE_ENABLED_ENV, True)
+    trace_dir = (
+        _env_path(TRACE_DIR_ENV, output_dir / "traces") if trace_enabled else None
+    )
+
     model_prices = {
         TIER_PRO: _env_price("OPENROUTER_PRICE_PRO"),
         TIER_FLASH: _env_price("OPENROUTER_PRICE_FLASH"),
@@ -209,6 +231,7 @@ def load_config() -> AppConfig:
         input_dir=_env_path("INPUT_DIR", data_dir / "input"),
         output_dir=output_dir,
         drafts_dir=_env_path("DRAFTS_DIR", output_dir / "drafts"),
+        trace_dir=trace_dir,
         openrouter_base_url=_env_str(
             "OPENROUTER_BASE_URL", DEFAULT_OPENROUTER_BASE_URL
         ),

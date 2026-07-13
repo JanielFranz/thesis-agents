@@ -98,7 +98,7 @@
     {
       "id": 3,
       "name": "agent_definitions",
-      "status": "in_progress",
+      "status": "done",
       "depends_on": [2],
       "paths": [
         "src/thesis_agents/agents.py",
@@ -117,7 +117,7 @@
     {
       "id": 4,
       "name": "agent_result_logging",
-      "status": "pending",
+      "status": "done",
       "depends_on": [2, 3],
       "paths": [
         "config.py",

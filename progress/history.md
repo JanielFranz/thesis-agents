@@ -62,3 +62,26 @@
   so a one-line env override fixes it). (2) dev deps `pytest`/`ruff` use `>=`,
   not exact pins — future tidy.
 - **Final status:** feature 2 `done`; feature 3 `agent_definitions` eligible.
+
+## 2026-07-13 — Feature 3 `agent_definitions` done
+
+- **Feature 3 (implementer → reviewer):** the four agents (`researcher`/
+  `writer`/`reviewer`/`judge`) in `agents.py` with per-agent tier (via
+  feature-2 `client.model_for_tier`, no inlined slug) + least-privilege tool
+  scoping (only researcher has web; reviewer/judge read-only; writer read +
+  draft-write; judge `max_turns=3`). Four system prompts as files in `prompts/`
+  (Judge prompt embeds the §7 rubric + Verdict shape + verbatim-quote rule;
+  Reviewer embeds `{approved, feedback}`). Structured output is prompting-based
+  (no native `output_type`, per the DeepSeek BFCL finding).
+- **Deny guardrail (`adapters/tools.py`, pre-authorized deviation):** real SDK
+  `tool_input_guardrail` delegating to a pure `evaluate_tool_call()` — denies
+  nested-agent/task spawning and any `.env`/secret access, in code not prompt;
+  reads confined to data dirs, writes to `data/output/drafts/`. The SDK's real
+  hook was used (`ToolInputGuardrailData` / `ToolGuardrailFunctionOutput`).
+- **Verification:** reviewer independently ran ruff (clean), 32 tests (18 new)
+  green with `OPENROUTER_API_KEY` stripped, `init.sh` exit 0, and **independently
+  probed the guardrail** with bypass vectors (`./.env`, `data/../.env`, `.ENV`,
+  JSON-string args, nested `secret/api_key.txt`, spawn/delegate tool names) —
+  all denied. All C1–C5 green. APPROVED (`progress/review_agent_definitions.md`).
+- **Final status:** feature 3 `done`. Feature 4 `agent_result_logging` (deps
+  [2,3]) now eligible — but see the controller-gap note in current.md.
