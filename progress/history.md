@@ -174,3 +174,23 @@
   future pass could measure `len(_normalize(quote))`.
 - **Final status:** feature 7 `done`. Only 8 `formats` (deps [5]) now blocks
   9 `controller`. Then 10 `cli` makes the pipeline runnable.
+
+## 2026-07-13 — Feature 8 `formats` done
+
+- **Feature 8 (implementer → reviewer):** `adapters/formats/` — `__init__.py`
+  with `slugify()` + `render_to_format(markdown, spec, output_dir,
+  name_hint=None) -> Path` (routes by `spec.format`; `output_dir` is the
+  caller's, never hard-coded); `prose.py` `render_docx()` renders the Writer's
+  Markdown subset (#/##/### headings, paragraphs, -/* bullets, 1. numbered,
+  **bold**/*italic*) to `.docx` via python-docx; `slides.py` `render_pptx()` is
+  a `NotImplementedError` stub (python-pptx NOT added). `python-docx==1.1.2`
+  exact-pinned (lxml transitive). Imports only `schemas` + stdlib + `docx`.
+- **Verification:** reviewer independently ran ruff (clean), 84 tests (13 new)
+  green with `OPENROUTER_API_KEY` stripped, `init.sh` exit 0, and verified the
+  docx **round-trip** (reopened the file, asserted heading/paragraph text +
+  bold/italic runs) plus inline-parser edge cases (`**bold**` not two italics;
+  leading `*italic*` not a bullet). All C1–C5 green. APPROVED
+  (`progress/review_formats.md`).
+- **Final status:** feature 8 `done`. All deps for 9 `controller`
+  [3,4,5,6,7,8] now satisfied — the state machines can be assembled next, then
+  10 `cli`.

@@ -192,7 +192,7 @@
     {
       "id": 8,
       "name": "formats",
-      "status": "in_progress",
+      "status": "done",
       "depends_on": [5],
       "paths": [
         "src/thesis_agents/adapters/formats/__init__.py",

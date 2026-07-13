@@ -6,9 +6,20 @@
 
 ## Feature in progress
 
-- **Feature 8 `formats`** (status `in_progress`; depends_on: [5] ✓ done).
-  Implementer dispatched. render_to_format switch + prose.py (Markdown→docx,
-  adds python-docx) + slides.py stub. Last piece before 9 `controller`.
+_(none)_ — Feature 8 `formats` completed + approved (2026-07-13); `done` flip
+finalizing. Eligible next: **9 `controller`** — all deps [3,4,5,6,7,8] now done.
+It assembles create_mode/review_mode from everything built. Then 10 `cli`.
+
+  Plan:
+  - Add python-docx==1.1.2 via uv (done). Import name `docx`.
+  - `__init__.py`: `slugify()` + `render_to_format(markdown, spec, output_dir,
+    name_hint=None)` routing by `spec.format` (docx→prose, pptx→slides);
+    output_dir from caller, created via pathlib.
+  - `prose.py`: `render_docx()` parses Markdown subset (#/##/### headings,
+    paragraphs, -/* bullets, 1. numbered, **bold**/*italic*) → .docx.
+  - `slides.py`: `render_pptx()` raises NotImplementedError.
+  - `test_formats.py`: docx round-trip (reopen with docx.Document, assert
+    heading+paragraph+bold), pptx raises, slugify cases.
 
 ## Backlog expanded — features 5–10 added (2026-07-13)
 
