@@ -231,7 +231,7 @@
     {
       "id": 10,
       "name": "cli",
-      "status": "pending",
+      "status": "done",
       "depends_on": [5, 9],
       "paths": [
         "src/thesis_agents/entrypoints/cli.py",

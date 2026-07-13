@@ -6,23 +6,31 @@
 
 ## Feature in progress
 
-_(none)_ — Feature 9 `controller` completed + approved (2026-07-13); `done`
-flip finalizing. **Only 10 `cli` remains** (deps [5,9] ✓) — the last feature;
-it makes the pipeline runnable via `python -m thesis_agents`.
+_(none)_ — **BACKLOG COMPLETE: all 10 features `done`.** Final `init.sh`:
+10 done / 0 in progress / 101 tests passing / exit 0. `python -m thesis_agents
+--help` runs (exit 0). Full detail in `progress/history.md` (2026-07-13 entries).
+
+## Pipeline status
+
+Assembled and runnable end-to-end (unit-tested with mocked models):
+`uv run python -m thesis_agents --spec <DocSpec.json> --mode create|review
+[--input <file>]`. A REAL run additionally needs: the OpenRouter model slugs
+verified, an `OPENROUTER_API_KEY` in `.env`, populated `data/` inputs, and the
+integration path exercised (`uv run pytest -m integration` — none written yet).
 
   Plan:
-  - Extend `core/controller.py` with `create_mode`/`review_mode` + typed
-    `CreateResult`/`ReviewResult`; keep feature-4 `run_agent`/`new_run_id`.
-  - Loop caps as integer counters read from injected `AppConfig`
-    (`max_review_passes`, `max_judge_retries`); no human checkpoints.
-  - `_run_structured()` helper: run_agent → extract JSON object → pydantic
-    validate (Review/Verdict), bounded parse retries, fail-safe not-approved.
-  - Judge verdict routed through `verify_verdict_quotes(verdict, draft)`;
-    approval is the code-recomputed/quote-verified value, not self-report.
-  - Post-cap unapproved run still renders + records verdict + logs warning.
-  - `test_controller.py`: review cap, judge cap unapproved completion, shared
-    run_id, verify-gate-bites (fabricated quote), review_mode no-writer.
-  - Async tests reuse feature-4's `asyncio.run(...)` pattern; no new dep.
+  - `entrypoints/cli.py`: `main(argv) -> int`; argparse `--spec` (required),
+    `--mode {create,review}` (prompt if omitted), `--input` (review),
+    `--env-file` (overridable so tests never read the real repo `.env`).
+  - `.env` loaded via a tiny stdlib parser (no new dep); writes `os.environ`
+    without overriding existing vars; config.py stays the only env *reader*.
+  - DocSpec validated at the boundary (read spec JSON → `DocSpec.model_validate`)
+    BEFORE building any client/controller call; invalid → clear error, rc!=0.
+  - Build `OpenRouterClient` via module-level `build_client(config)` (mockable);
+    `asyncio.run(create_mode/review_mode)`; print output path + approved.
+  - `__main__.py`: `raise SystemExit(main())` for `python -m thesis_agents`.
+  - `test_cli.py`: create dispatch, review dispatch (+doc text), invalid-spec
+    boundary (no controller call), interactive mode prompt (stdin mocked).
 
 ## Backlog expanded — features 5–10 added (2026-07-13)
 

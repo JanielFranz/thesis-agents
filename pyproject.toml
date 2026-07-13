@@ -8,6 +8,16 @@ dependencies = [
     "python-docx==1.1.2",
 ]
 
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+# src/ layout: the importable package is src/thesis_agents. Root-level config.py
+# stays out of the wheel by design (architecture §3 keeps it at the root); it
+# resolves at runtime via the cwd that `python -m thesis_agents` puts on sys.path.
+[tool.hatch.build.targets.wheel]
+packages = ["src/thesis_agents"]
+
 [dependency-groups]
 dev = [
     "pytest>=9.0.3",

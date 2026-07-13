@@ -224,3 +224,33 @@
   could harden it (not reachable with defaults).
 - **Final status:** feature 9 `done`. Only **10 `cli`** (deps [5,9]) remains —
   it makes the pipeline runnable via `python -m thesis_agents`.
+
+## 2026-07-13 — Feature 10 `cli` done — BACKLOG COMPLETE (10/10)
+
+- **Feature 10 (implementer → reviewer):** `entrypoints/cli.py` `main(argv) ->
+  int` — argparse `--spec`/`--mode {create,review}`/`--input`/`--env-file`;
+  loads `.env` via a dependency-free stdlib parser (no python-dotenv;
+  non-overriding, secret never logged); **validates the DocSpec at the boundary
+  BEFORE any client/model call**; resolves mode (single `input()` prompt if
+  `--mode` omitted — the pipeline's only human interaction, §6.2); builds the
+  `OpenRouterClient` and `asyncio.run`s `create_mode`/`review_mode`; prints the
+  output path + approval. `__main__.py` wires `python -m thesis_agents`.
+- **Necessary deviation (in-scope, pyproject in paths):** added a hatchling
+  `[build-system]` so the src-layout package resolves under `python -m` (project
+  was previously a uv `virtual` project). `uv.lock` diff = single `virtual →
+  editable` line; **no new runtime dependency**. `config.py` stays at repo root
+  (§3), importable via cwd when run from the repo.
+- **Verification:** reviewer independently ran the FULL suite — 101 tests (11
+  new) green with `OPENROUTER_API_KEY` stripped and the real `.env` not consulted
+  — confirmed NO regression across all 9 prior features from the build-system
+  change, `init.sh` exit 0, and both offline smoke tests (`--help` exit 0;
+  invalid `--spec` → exit 2 with no model call). All C1–C5 green. APPROVED
+  (`progress/review_cli.md`).
+- **BACKLOG COMPLETE:** all 10 features `done`. The pipeline is assembled and
+  runnable via `python -m thesis_agents --spec <DocSpec.json> --mode
+  create|review [--input <file>]` (unit-tested with mocked models). A real run
+  still requires verifying the OpenRouter model slugs (`qwen/qwen3.7-plus`,
+  `deepseek-v4-*`) and running the integration path.
+- **Open (non-blocking) items carried in current.md:** slug verification; dev
+  deps `>=` vs exact pins; stray `main.py`; guardrail `_SECRET_MARKERS`; verify
+  min-length-vs-normalized; controller `max(1, cap)` guard.
