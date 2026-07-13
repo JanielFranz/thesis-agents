@@ -213,7 +213,7 @@
     {
       "id": 9,
       "name": "controller",
-      "status": "pending",
+      "status": "done",
       "depends_on": [3, 4, 5, 6, 7, 8],
       "paths": [
         "src/thesis_agents/core/controller.py",

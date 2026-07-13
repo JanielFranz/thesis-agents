@@ -194,3 +194,33 @@
 - **Final status:** feature 8 `done`. All deps for 9 `controller`
   [3,4,5,6,7,8] now satisfied — the state machines can be assembled next, then
   10 `cli`.
+
+## 2026-07-13 — Feature 9 `controller` done (integration centerpiece)
+
+- **Feature 9 (implementer → reviewer):** extended `core/controller.py` (feature-4
+  `run_agent`/`new_run_id` left intact) with async `create_mode(spec, client,
+  config, *, agents)` and `review_mode(document, spec, client, config, ...)` +
+  typed frozen `CreateResult`/`ReviewResult`.
+  - **create_mode (§2.1):** one `run_id` threaded through Researcher →
+    Writer(outline) → Writer(draft) → Reviewer↔Writer (counter `< max_review_
+    passes`) → Judge↔Writer (counter `< max_judge_retries`) → `render_to_format`.
+    Unattended — no human checkpoints.
+  - **Gate discipline:** `_run_structured()` extracts+validates the Reviewer/
+    Judge JSON against `Review`/`Verdict` (bounded retry `=2`, then fail-safe
+    not-approved); routing reads `verify_verdict_quotes(raw_verdict, draft)`,
+    NEVER the model's self-reported `approved`.
+  - **Post-cap (§6.2):** Judge never approving within the cap → logs
+    `create_shipped_unapproved`, still renders, returns `approved=False`. No
+    prompt, no infinite loop.
+  - **review_mode (§2.2):** Reviewer → Judge(verify) → assemble Markdown report →
+    render (`review-report-<name>`); no Writer, no loop.
+- **Verification:** reviewer independently ran ruff (clean), 91 tests (7 new)
+  green with `OPENROUTER_API_KEY` stripped, `init.sh` exit 0, verified consumed-
+  module APIs against real signatures, confirmed **no feature-4 regression**, and
+  confirmed the verify-gate/unattended/bounded-loop behaviors. All C1–C5 green.
+  APPROVED (`progress/review_controller.md`).
+- **Non-blocking note (tracked):** caps are config-driven; a pathological
+  `max_*=0` override would skip a loop entirely — a future `max(1, cap)` guard
+  could harden it (not reachable with defaults).
+- **Final status:** feature 9 `done`. Only **10 `cli`** (deps [5,9]) remains —
+  it makes the pipeline runnable via `python -m thesis_agents`.

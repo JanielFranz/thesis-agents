@@ -6,20 +6,23 @@
 
 ## Feature in progress
 
-_(none)_ — Feature 8 `formats` completed + approved (2026-07-13); `done` flip
-finalizing. Eligible next: **9 `controller`** — all deps [3,4,5,6,7,8] now done.
-It assembles create_mode/review_mode from everything built. Then 10 `cli`.
+_(none)_ — Feature 9 `controller` completed + approved (2026-07-13); `done`
+flip finalizing. **Only 10 `cli` remains** (deps [5,9] ✓) — the last feature;
+it makes the pipeline runnable via `python -m thesis_agents`.
 
   Plan:
-  - Add python-docx==1.1.2 via uv (done). Import name `docx`.
-  - `__init__.py`: `slugify()` + `render_to_format(markdown, spec, output_dir,
-    name_hint=None)` routing by `spec.format` (docx→prose, pptx→slides);
-    output_dir from caller, created via pathlib.
-  - `prose.py`: `render_docx()` parses Markdown subset (#/##/### headings,
-    paragraphs, -/* bullets, 1. numbered, **bold**/*italic*) → .docx.
-  - `slides.py`: `render_pptx()` raises NotImplementedError.
-  - `test_formats.py`: docx round-trip (reopen with docx.Document, assert
-    heading+paragraph+bold), pptx raises, slugify cases.
+  - Extend `core/controller.py` with `create_mode`/`review_mode` + typed
+    `CreateResult`/`ReviewResult`; keep feature-4 `run_agent`/`new_run_id`.
+  - Loop caps as integer counters read from injected `AppConfig`
+    (`max_review_passes`, `max_judge_retries`); no human checkpoints.
+  - `_run_structured()` helper: run_agent → extract JSON object → pydantic
+    validate (Review/Verdict), bounded parse retries, fail-safe not-approved.
+  - Judge verdict routed through `verify_verdict_quotes(verdict, draft)`;
+    approval is the code-recomputed/quote-verified value, not self-report.
+  - Post-cap unapproved run still renders + records verdict + logs warning.
+  - `test_controller.py`: review cap, judge cap unapproved completion, shared
+    run_id, verify-gate-bites (fabricated quote), review_mode no-writer.
+  - Async tests reuse feature-4's `asyncio.run(...)` pattern; no new dep.
 
 ## Backlog expanded — features 5–10 added (2026-07-13)
 
