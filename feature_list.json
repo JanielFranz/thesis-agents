@@ -157,7 +157,7 @@
     {
       "id": 6,
       "name": "rubric",
-      "status": "in_progress",
+      "status": "done",
       "depends_on": [1],
       "paths": [
         "src/thesis_agents/core/rubric.py",
@@ -174,7 +174,7 @@
     {
       "id": 7,
       "name": "verify",
-      "status": "pending",
+      "status": "in_progress",
       "depends_on": [5, 6],
       "paths": [
         "src/thesis_agents/core/verify.py",

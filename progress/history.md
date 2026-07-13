@@ -130,3 +130,22 @@
   (`progress/review_schemas.md`).
 - **Final status:** feature 5 `done`. Eligible next: 6 `rubric` and 8 `formats`
   (deps satisfied). 6 `rubric` recommended next (unblocks 7 `verify`).
+
+## 2026-07-13 — Feature 6 `rubric` done
+
+- **Feature 6 (implementer → reviewer):** `core/rubric.py` — the fixed
+  six-criterion rubric (grounding/references pass≥4; scope/structure/argument/
+  style pass≥3; scores 0..5) as immutable frozen `Criterion` dataclasses in a
+  module-level `RUBRIC` tuple. `rubric_to_text()` for prompt embedding; parity/
+  threshold API for feature 7: `criterion_ids()`, `criterion_thresholds()`,
+  `is_passing()`. Passing rule documented (approved iff every score ≥ threshold).
+  Pure: no I/O, no env, no `schemas` import, no new dep.
+- **Cross-file consistency:** rubric ids/thresholds match `prompts/judge.md`
+  (feature 3) exactly — independently confirmed by the reviewer at both file:line
+  locations. This matters because the Judge emits `Verdict.criterionId`s that
+  feature 7 `verify` will check against this rubric.
+- **Verification:** reviewer independently ran ruff (clean), 61 tests (8 new)
+  green with `OPENROUTER_API_KEY` stripped, `init.sh` exit 0. All C1–C5 green.
+  APPROVED (`progress/review_rubric.md`).
+- **Final status:** feature 6 `done`. Eligible next: 7 `verify` (deps [5,6] now
+  both done) and 8 `formats` (deps [5]). 7 `verify` completes the gate logic.

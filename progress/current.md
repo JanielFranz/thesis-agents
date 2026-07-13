@@ -6,18 +6,10 @@
 
 ## Feature in progress
 
-- **Feature 6 `rubric`** (status `in_progress`; depends_on: [1] ✓ done).
-  Implementer dispatched. Unblocks 7 `verify`. (5 `schemas` done + approved.)
-
-### Plan
-- Add `pydantic` via `uv add` with an exact pin (only new dep). ✓ 2.13.4
-- Build DocSpec/Chapter/CriterionScore/Review/Verdict in schemas/models.py
-  with §8 field names verbatim (no aliases), enums via Literal, score 0..5. ✓
-- Re-export public models from schemas/__init__.py. ✓
-- Tests: happy-path value asserts + error paths + JSON-schema presence. ✓
-- Verify: ruff clean, format clean, pytest green (key unset), init.sh EXIT=0. ✓
-
-Report: progress/impl_schemas.md. Awaiting reviewer; not flipped to `done`.
+_(none)_ — Feature 6 `rubric` completed + approved (2026-07-13). `init.sh`:
+6 done / 0 in progress. Eligible next: **7 `verify`** (deps [5,6] ✓) and
+**8 `formats`** (deps [5] ✓). Recommended: 7 `verify` (completes the gate logic;
+along with 8 it's the last piece before 9 `controller`).
 
 ## Backlog expanded — features 5–10 added (2026-07-13)
 
